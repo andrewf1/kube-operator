@@ -55,6 +55,12 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>io.javaoperatorsdk</groupId>
+            <artifactId>operator-framework-spring-boot-starter-test</artifactId>
+            <version>${operator-framework.starter.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
