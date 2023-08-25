@@ -6,7 +6,7 @@ import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.processing.dependent.kubernetes.CRUDKubernetesDependentResource;
 import io.javaoperatorsdk.operator.processing.dependent.kubernetes.KubernetesDependent;
 
-import static af.ex.kube.kubeoperator.ExecutionPlanReconciler.SELECTOR;
+import static af.ex.kube.kubeoperator.reconciler.ExecutionPlanReconciler.SELECTOR;
 
 @KubernetesDependent(labelSelector = SELECTOR)
 public class DeploymentDependentResource extends CRUDKubernetesDependentResource<Deployment, ExecutionPlan> {
