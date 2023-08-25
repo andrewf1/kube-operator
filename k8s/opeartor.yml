@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: execution-plan-operator
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: execution-plan-operator
+spec:
+  selector:
+    matchLabels:
+      app: execution-plan-operator
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: execution-plan-operator
+    spec:
+      serviceAccountName: execution-plan-operator
+      containers:
+        - name: operator
+          image: execution-plan-operator
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 80
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: operator-admin
+subjects:
+  - kind: ServiceAccount
+    name: execution-plan-operator
+    namespace: andrew-space
+roleRef:
+  kind: ClusterRole
+  name: execution-plan-operator
+  apiGroup: ""
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: execution-plan-operator
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - deployments
+      - pods
+    verbs:
+      - '*'
+  - apiGroups:
+      - "apps"
+    resources:
+      - deployments
+      - services
+    verbs:
+      - '*'
+  - apiGroups:
+      - "apiextensions.k8s.io"
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - '*'
+  - apiGroups:
+      - "executionplans.af"
+    resources:
+      - execution-plans
+      - execution-plans/status
+    verbs:
+      - '*'
