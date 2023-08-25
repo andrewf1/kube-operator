@@ -1,18 +1,19 @@
 package af.ex.kube.kubeoperator.reconciler;
 
 import af.ex.kube.kubeoperator.resource.custom.ExecutionPlan;
-import af.ex.kube.kubeoperator.resource.custom.ExecutionPlanStatus;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.javaoperatorsdk.operator.api.reconciler.*;
 import io.javaoperatorsdk.operator.processing.dependent.kubernetes.KubernetesDependentResource;
 import io.javaoperatorsdk.operator.processing.dependent.workflow.Workflow;
 import io.javaoperatorsdk.operator.processing.event.source.EventSource;
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Map;
 
 @ControllerConfiguration(labelSelector = ExecutionPlanDependentWorkflowReconciler.DEPENDENT_RESOURCE_LABEL_SELECTOR)
 @AllArgsConstructor
+@Slf4j
 public class ExecutionPlanDependentWorkflowReconciler implements Reconciler<ExecutionPlan>,
         ErrorStatusHandler<ExecutionPlan>, EventSourceInitializer<ExecutionPlan> {
 
@@ -24,7 +25,7 @@ public class ExecutionPlanDependentWorkflowReconciler implements Reconciler<Exec
     public UpdateControl<ExecutionPlan> reconcile(ExecutionPlan resource,
                                                   Context<ExecutionPlan> context) throws Exception {
         workflow.reconcile(resource, context);
-        resource.setStatus(ExecutionPlanStatus.builder()
+        resource.setStatus(ExecutionPlan.ExecutionPlanStatus.builder()
                 .error(false)
                 .reason(context.getSecondaryResource(Deployment.class)
                         .orElseThrow()
@@ -39,6 +40,7 @@ public class ExecutionPlanDependentWorkflowReconciler implements Reconciler<Exec
                                                                      Context<ExecutionPlan> context, Exception e) {
         resource.getStatus().setError(true);
         resource.getStatus().setReason(e.getMessage());
+        log.info("Updating error status: {}", resource);
         return ErrorStatusUpdateControl.updateStatus(resource);
     }
 
