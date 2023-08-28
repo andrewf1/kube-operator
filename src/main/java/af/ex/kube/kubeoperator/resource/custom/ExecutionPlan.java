@@ -12,6 +12,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 import java.util.List;
+import java.util.Map;
 import java.util.PriorityQueue;
 
 @Group("af.executionplan")
@@ -29,7 +30,7 @@ public class ExecutionPlan extends CustomResource<ExecutionPlanSpec, ExecutionPl
         @Builder
         public static class Plan {
             private String planName;
-            private String deploymentName;
+            private List<String> deploymentNames;
             private List<String> resources;
         }
     }
@@ -40,5 +41,6 @@ public class ExecutionPlan extends CustomResource<ExecutionPlanSpec, ExecutionPl
     public static class ExecutionPlanStatus extends ObservedGenerationAwareStatus {
         private Boolean error;
         private String reason;
+        private Map<String, Integer> deploymentReplicaCounts;
     }
 }
