@@ -6,6 +6,7 @@ import io.javaoperatorsdk.operator.api.reconciler.*;
 import io.javaoperatorsdk.operator.api.reconciler.dependent.Dependent;
 
 @ControllerConfiguration(
+        labelSelector = ExecutionPlanManagedDependenciesReconciler.SELECTOR,
         dependents = {
                 @Dependent(type = DeploymentDependentResource.class)
         })
