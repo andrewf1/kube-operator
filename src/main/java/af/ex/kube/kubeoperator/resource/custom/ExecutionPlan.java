@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 
-@Group("af.executionplan")
+@Group("ex.operator")
 @Version("v1")
 @Data
 @EqualsAndHashCode(callSuper = true)
