@@ -1,0 +1,20 @@
+apiVersion: af.executionplan/v1
+kind: ExecutionPlan
+metadata:
+  name: example-executionplan
+spec:
+  plans:
+    queue:
+      - planName: test-plan
+        deploymentNames:
+          - nginx-deployment
+        resources:
+          - service
+          - resource-2
+    comparator:
+      type: "default"
+status:
+  error: false
+  reason: "No issues"
+  deploymentReplicaCounts:
+  observedGeneration: 1
