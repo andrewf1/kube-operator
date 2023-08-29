@@ -1,22 +1,35 @@
 package af.ex.kube.kubeoperator.reconciler;
 
-import af.ex.kube.kubeoperator.resource.custom.*;
-import af.ex.kube.kubeoperator.resource.custom.ExecutionPlan.ExecutionPlanSpec.*;
-import io.fabric8.kubernetes.api.model.*;
-import io.fabric8.kubernetes.api.model.apps.*;
-import io.fabric8.kubernetes.client.*;
-import io.javaoperatorsdk.operator.api.config.informer.*;
-import io.javaoperatorsdk.operator.api.reconciler.*;
+import af.ex.kube.kubeoperator.resource.custom.ExecutionPlan;
+import af.ex.kube.kubeoperator.resource.custom.ExecutionPlan.ExecutionPlanSpec.Plan;
+import io.fabric8.kubernetes.api.model.apps.Deployment;
+import io.fabric8.kubernetes.api.model.apps.DeploymentBuilder;
+import io.fabric8.kubernetes.client.KubernetesClient;
+import io.javaoperatorsdk.operator.api.config.informer.InformerConfiguration;
+import io.javaoperatorsdk.operator.api.reconciler.Cleaner;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
-import io.javaoperatorsdk.operator.processing.event.*;
-import io.javaoperatorsdk.operator.processing.event.source.*;
+import io.javaoperatorsdk.operator.api.reconciler.ControllerConfiguration;
+import io.javaoperatorsdk.operator.api.reconciler.DeleteControl;
+import io.javaoperatorsdk.operator.api.reconciler.ErrorStatusHandler;
+import io.javaoperatorsdk.operator.api.reconciler.ErrorStatusUpdateControl;
+import io.javaoperatorsdk.operator.api.reconciler.EventSourceContext;
+import io.javaoperatorsdk.operator.api.reconciler.EventSourceInitializer;
+import io.javaoperatorsdk.operator.api.reconciler.Reconciler;
+import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
+import io.javaoperatorsdk.operator.processing.event.ResourceID;
 import io.javaoperatorsdk.operator.processing.event.source.EventSource;
-import io.javaoperatorsdk.operator.processing.event.source.informer.*;
+import io.javaoperatorsdk.operator.processing.event.source.PrimaryToSecondaryMapper;
+import io.javaoperatorsdk.operator.processing.event.source.informer.InformerEventSource;
+import lombok.extern.slf4j.Slf4j;
 
-import java.util.*;
-import java.util.stream.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @ControllerConfiguration
+@Slf4j
 public class ExecutionPlanReconciler implements Reconciler<ExecutionPlan>, Cleaner<ExecutionPlan>,
         EventSourceInitializer<ExecutionPlan>, ErrorStatusHandler<ExecutionPlan> {
 
@@ -25,19 +38,20 @@ public class ExecutionPlanReconciler implements Reconciler<ExecutionPlan>, Clean
     @Override
     public UpdateControl<ExecutionPlan> reconcile(ExecutionPlan resource,
                                                   Context<ExecutionPlan> context) throws Exception {
+        log.info("Reconciling resource {}", resource);
         Map<String, Integer> deploymentReplicas = new HashMap<>();
         context.getSecondaryResources(Deployment.class)
                 .forEach(deployment -> {
+                    log.info("Attempting to scale deployment {}", deployment);
                     context.getClient()
                             .apps()
                             .deployments()
                             .withName(deployment.getFullResourceName())
                             .patch(new DeploymentBuilder(deployment)
                                     .editSpec()
-                                        .withReplicas(1)
+                                    .withReplicas(1)
                                     .endSpec()
                                     .build());
-
                     deploymentReplicas.put(deployment.getFullResourceName(),
                             context.getClient()
                                     .apps()
@@ -65,11 +79,13 @@ public class ExecutionPlanReconciler implements Reconciler<ExecutionPlan>, Clean
 
     @Override
     public DeleteControl cleanup(ExecutionPlan resource, Context<ExecutionPlan> context) {
+        log.info("Deleting resource {}", resource);
         return DeleteControl.defaultDelete();
     }
 
     @Override
     public Map<String, EventSource> prepareEventSources(EventSourceContext<ExecutionPlan> context) {
+        log.info("Preparing event sources...");
         var deploymentEventSource = new InformerEventSource<>(InformerConfiguration.from(Deployment.class, context)
                 .withLabelSelector(SELECTOR)
                 .withPrimaryToSecondaryMapper((PrimaryToSecondaryMapper<ExecutionPlan>) primary ->
@@ -79,6 +95,9 @@ public class ExecutionPlanReconciler implements Reconciler<ExecutionPlan>, Clean
                                 .map(deploymentName -> getDeploymentByName(deploymentName, context.getClient()))
                                 .flatMap(deployment -> {
                                     deployment.addOwnerReference(primary);
+                                    log.debug("Adding owner reference {} to secondary rsc {}",
+                                            primary,
+                                            deployment);
                                     return Stream.of(deployment);
                                 })
                                 .map(ResourceID::fromResource)
