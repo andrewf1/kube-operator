@@ -1,20 +1,18 @@
-apiVersion: af.executionplan/v1
+apiVersion: ex.operator/v1
 kind: ExecutionPlan
 metadata:
   name: example-executionplan
+  namespace: andrew-space
 spec:
   plans:
-    queue:
-      - planName: test-plan
-        deploymentNames:
-          - nginx-deployment
-        resources:
-          - service
-          - resource-2
-    comparator:
-      type: "default"
+    - planName: test-plan
+      deploymentNames:
+        - nginx-deployment
+      resources:
+        - service
+        - resource-2
 status:
   error: false
-  reason: "No issues"
+  reason: "No issues. Creation"
   deploymentReplicaCounts:
   observedGeneration: 1
