@@ -25,13 +25,13 @@ public class ExecutionPlanDependentWorkflowReconciler implements Reconciler<Exec
     public UpdateControl<ExecutionPlan> reconcile(ExecutionPlan resource,
                                                   Context<ExecutionPlan> context) throws Exception {
         workflow.reconcile(resource, context);
-        resource.setStatus(ExecutionPlan.ExecutionPlanStatus.builder()
-                .error(false)
-                .reason(context.getSecondaryResource(Deployment.class)
-                        .orElseThrow()
-                        .getMetadata()
-                        .getName() + " is created.")
-                .build());
+//        resource.setStatus(ExecutionPlan.ExecutionPlanStatus.builder()
+//                .error(false)
+//                .reason(context.getSecondaryResource(Deployment.class)
+//                        .orElseThrow()
+//                        .getMetadata()
+//                        .getName() + " is created.")
+//                .build());
         return UpdateControl.patchStatus(resource);
     }
 

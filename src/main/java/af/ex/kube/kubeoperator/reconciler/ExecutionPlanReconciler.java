@@ -48,6 +48,9 @@ public class ExecutionPlanReconciler implements Reconciler<ExecutionPlan>, Clean
                             .deployments()
                             .withName(deployment.getFullResourceName())
                             .patch(new DeploymentBuilder(deployment)
+                                    .editMetadata()
+                                    .withNamespace(resource.getMetadata().getNamespace())
+                                    .endMetadata()
                                     .editSpec()
                                     .withReplicas(1)
                                     .endSpec()
@@ -92,7 +95,9 @@ public class ExecutionPlanReconciler implements Reconciler<ExecutionPlan>, Clean
                         primary.getSpec().getPlans().stream()
                                 .map(Plan::getDeploymentNames)
                                 .flatMap(List::stream)
-                                .map(deploymentName -> getDeploymentByName(deploymentName, context.getClient()))
+                                .map(deploymentName -> getDeploymentByName(deploymentName,
+                                        context.getClient(),
+                                        primary.getMetadata().getNamespace()))
                                 .flatMap(deployment -> {
                                     deployment.addOwnerReference(primary);
                                     log.debug("Adding owner reference {} to secondary rsc {}",
@@ -106,9 +111,12 @@ public class ExecutionPlanReconciler implements Reconciler<ExecutionPlan>, Clean
         return EventSourceInitializer.nameEventSources(deploymentEventSource);
     }
 
-    protected static Deployment getDeploymentByName(String name, KubernetesClient client) {
+    protected static Deployment getDeploymentByName(String name,
+                                                    KubernetesClient client,
+                                                    String namespace) {
         return client.apps()
                 .deployments()
+                .inNamespace(namespace)
                 .withName(name)
                 .get();
     }
