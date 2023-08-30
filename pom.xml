@@ -60,9 +60,25 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>io.javaoperatorsdk</groupId>
             <artifactId>operator-framework-spring-boot-starter-test</artifactId>
             <version>${operator-framework.starter.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.javaoperatorsdk</groupId>
+            <artifactId>operator-framework-junit-5</artifactId>
+            <version>4.4.2</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
