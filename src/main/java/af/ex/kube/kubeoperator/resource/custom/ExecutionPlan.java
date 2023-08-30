@@ -1,7 +1,8 @@
 package af.ex.kube.kubeoperator.resource.custom;
 
-import af.ex.kube.kubeoperator.config.OperatorConfig;
-import af.ex.kube.kubeoperator.resource.custom.ExecutionPlan.*;
+import af.ex.kube.kubeoperator.resource.custom.ExecutionPlan.ExecutionPlanSpec;
+import af.ex.kube.kubeoperator.resource.custom.ExecutionPlan.ExecutionPlanStatus;
+import com.fasterxml.jackson.annotation.JsonCreator;
 import io.fabric8.kubernetes.api.model.Namespaced;
 import io.fabric8.kubernetes.client.CustomResource;
 import io.fabric8.kubernetes.model.annotation.Group;
@@ -10,24 +11,26 @@ import io.javaoperatorsdk.operator.api.ObservedGenerationAwareStatus;
 import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+import lombok.extern.jackson.Jacksonized;
 
 import java.util.List;
 import java.util.Map;
-import java.util.PriorityQueue;
 
 @Group("ex.operator")
 @Version("v1")
-@Data
-@EqualsAndHashCode(callSuper = true)
 public class ExecutionPlan extends CustomResource<ExecutionPlanSpec, ExecutionPlanStatus> implements Namespaced {
 
-    @Data
-    @Builder
+    @Getter
+    @Setter
     public static class ExecutionPlanSpec {
-        private PriorityQueue<Plan> plans;
+        private List<Plan> plans;
 
-        @Data
-        @Builder
+        @Getter
+        @Setter
         public static class Plan {
             private String planName;
             private List<String> deploymentNames;
@@ -35,9 +38,8 @@ public class ExecutionPlan extends CustomResource<ExecutionPlanSpec, ExecutionPl
         }
     }
 
-    @Data
-    @Builder
-    @EqualsAndHashCode(callSuper = true)
+    @Getter
+    @Setter
     public static class ExecutionPlanStatus extends ObservedGenerationAwareStatus {
         private Boolean error;
         private String reason;
