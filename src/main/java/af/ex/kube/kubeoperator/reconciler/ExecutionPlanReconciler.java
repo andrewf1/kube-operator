@@ -15,6 +15,7 @@ import io.javaoperatorsdk.operator.api.reconciler.ErrorStatusUpdateControl;
 import io.javaoperatorsdk.operator.api.reconciler.EventSourceInitializer;
 import io.javaoperatorsdk.operator.api.reconciler.Reconciler;
 import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
+import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashMap;
@@ -44,14 +45,11 @@ public class ExecutionPlanReconciler implements Reconciler<ExecutionPlan>, Clean
                 .map(deploymentName -> getDeploymentByName(deploymentName,
                         context.getClient(),
                         resource.getMetadata().getNamespace()))
-                .flatMap(deployment -> {
-                    deployment.addOwnerReference(resource);
-                    log.debug("Adding owner reference {} to dependent resource {}",
-                            resource.getFullResourceName(),
-                            deployment.getFullResourceName());
-                    return Stream.of(deployment);
-                })
-                .forEach(deployment -> scaleDeployment(deployment, context.getClient()));
+                .forEach(deployment -> scaleDeployment(Objects.requireNonNull(deployment),
+                        context.getClient(),
+                        deployment.getSpec().getReplicas() >= 1 ?
+                                deployment.getSpec().getReplicas() :
+                                1));
 
         currentDeploymentReplicas.forEach((key, value) -> {
             if (value < 1) {
@@ -72,41 +70,52 @@ public class ExecutionPlanReconciler implements Reconciler<ExecutionPlan>, Clean
         return UpdateControl.patchStatus(resource);
     }
 
-    private void scaleDeployment(Deployment deployment, KubernetesClient client) {
-        log.info("Attempting to scale deployment {}", deployment);
+    private void scaleDeployment(@NonNull Deployment deployment,
+                                 @NonNull KubernetesClient client,
+                                 int count) {
+        log.info("Attempting to scale deployment {}", deployment.getMetadata().getName());
         client.apps()
                 .deployments()
                 .inNamespace(deployment.getMetadata().getNamespace())
-                .withName(deployment.getFullResourceName())
+                .withName(deployment.getMetadata().getName())
                 .patch(new DeploymentBuilder(deployment)
                         .editSpec()
-                        .withReplicas(deployment.getSpec().getReplicas() >= 1 ?
-                                deployment.getSpec().getReplicas() :
-                                1)
+                        .withReplicas(count)
                         .endSpec()
                         .build());
 
-        currentDeploymentReplicas.put(deployment.getFullResourceName(),
+        currentDeploymentReplicas.put(deployment.getMetadata().getName(),
                 client.apps()
                         .deployments()
-                        .inNamespace(deployment.getFullResourceName())
-                        .withName(deployment.getFullResourceName())
+                        .inNamespace(deployment.getMetadata().getNamespace())
+                        .withName(deployment.getMetadata().getName())
                         .get()
                         .getSpec()
                         .getReplicas());
         log.debug("{} deployment -> {} replicas",
-                deployment.getFullResourceName(),
-                currentDeploymentReplicas.get(deployment.getFullResourceName()));
+                deployment.getMetadata().getName(),
+                currentDeploymentReplicas.get(deployment.getMetadata().getName()));
     }
 
     @Override
     public DeleteControl cleanup(ExecutionPlan resource, Context<ExecutionPlan> context) {
-        log.info("Deleting resource {}", resource);
+        log.info("Deleting resource {}", resource.getMetadata().getName());
+
+        resource.getSpec().getPlans().stream()
+                .map(Plan::getDeploymentNames)
+                .flatMap(List::stream)
+                .map(deploymentName -> getDeploymentByName(deploymentName,
+                        context.getClient(),
+                        resource.getMetadata().getNamespace()))
+                .forEach(deployment -> scaleDeployment(deployment,
+                        context.getClient(),
+                        0));
+
         return DeleteControl.defaultDelete();
     }
 
     protected static Deployment getDeploymentByName(String name,
-                                                    KubernetesClient client,
+                                                    @NonNull KubernetesClient client,
                                                     String namespace) {
         log.debug("Attempting to retrieve deployment {}:{}", namespace, name);
         return Objects.requireNonNull(client.apps()
