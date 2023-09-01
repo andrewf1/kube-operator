@@ -8,10 +8,12 @@ spec:
   selector:
     matchLabels:
       app: nginx-app
+      app.kubernetes.io/managed-by: execution-plan-operator
   template:
     metadata:
       labels:
         app: nginx-app
+        app.kubernetes.io/managed-by: execution-plan-operator
     spec:
       containers:
         - name: nginx-container
