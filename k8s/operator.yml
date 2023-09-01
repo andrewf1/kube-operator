@@ -34,7 +34,7 @@ spec:
             initialDelaySeconds: 1
           livenessProbe:
             httpGet:
-              path: /healthz
+              path: /health
               port: 8080
             initialDelaySeconds: 30
 

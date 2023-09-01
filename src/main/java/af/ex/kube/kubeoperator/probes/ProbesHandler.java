@@ -24,7 +24,7 @@ public class ProbesHandler {
                 .body("Operator has not started...");
     }
 
-    @GetMapping("/healthz")
+    @GetMapping("/help")
     public ResponseEntity<String> livenessHandler() {
         if (operator.getRuntimeInfo().allEventSourcesAreHealthy()) {
             return ResponseEntity.status(HttpStatus.OK)
