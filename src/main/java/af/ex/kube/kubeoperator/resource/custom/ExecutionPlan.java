@@ -17,6 +17,7 @@ import lombok.Setter;
 import lombok.ToString;
 import lombok.extern.jackson.Jacksonized;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -41,8 +42,8 @@ public class ExecutionPlan extends CustomResource<ExecutionPlanSpec, ExecutionPl
     @Getter
     @Setter
     public static class ExecutionPlanStatus extends ObservedGenerationAwareStatus {
-        private Boolean error;
-        private String reason;
-        private Map<String, Integer> deploymentReplicaCounts;
+        private Boolean error = false;
+        private String reason = "No error: Creation.";
+        private Map<String, Integer> deploymentReplicaCounts = new HashMap<>();
     }
 }
