@@ -2,70 +2,58 @@ package af.ex.kube.kubeoperator.reconciler;
 
 import af.ex.kube.kubeoperator.resource.custom.ExecutionPlan;
 import af.ex.kube.kubeoperator.resource.custom.ExecutionPlan.ExecutionPlanSpec.Plan;
+import af.ex.kube.kubeoperator.resource.custom.ExecutionPlan.ExecutionPlanStatus;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.api.model.apps.DeploymentBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
-import io.javaoperatorsdk.operator.api.config.informer.InformerConfiguration;
 import io.javaoperatorsdk.operator.api.reconciler.Cleaner;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.ControllerConfiguration;
 import io.javaoperatorsdk.operator.api.reconciler.DeleteControl;
 import io.javaoperatorsdk.operator.api.reconciler.ErrorStatusHandler;
 import io.javaoperatorsdk.operator.api.reconciler.ErrorStatusUpdateControl;
-import io.javaoperatorsdk.operator.api.reconciler.EventSourceContext;
 import io.javaoperatorsdk.operator.api.reconciler.EventSourceInitializer;
 import io.javaoperatorsdk.operator.api.reconciler.Reconciler;
 import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
-import io.javaoperatorsdk.operator.processing.event.ResourceID;
-import io.javaoperatorsdk.operator.processing.event.source.EventSource;
-import io.javaoperatorsdk.operator.processing.event.source.PrimaryToSecondaryMapper;
-import io.javaoperatorsdk.operator.processing.event.source.informer.InformerEventSource;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashMap;
-import java.util.Map;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Stream;
 
 @ControllerConfiguration
 @Slf4j
 public class ExecutionPlanReconciler implements Reconciler<ExecutionPlan>, Cleaner<ExecutionPlan>,
-        EventSourceInitializer<ExecutionPlan>, ErrorStatusHandler<ExecutionPlan> {
+        ErrorStatusHandler<ExecutionPlan> {
 
-    public static final String SELECTOR = "execution-plan-managed";
+    public static final String SELECTOR = "app.kubernetes.io/managed-by=execution-plan-operator";
+
+    private final Map<String, Integer> currentDeploymentReplicas = new HashMap<>();
 
     @Override
     public UpdateControl<ExecutionPlan> reconcile(ExecutionPlan resource,
                                                   Context<ExecutionPlan> context) throws Exception {
         log.info("Reconciling resource {}", resource);
-        Map<String, Integer> deploymentReplicas = new HashMap<>();
-        context.getSecondaryResources(Deployment.class)
-                .forEach(deployment -> {
-                    log.info("Attempting to scale deployment {}", deployment);
-                    context.getClient()
-                            .apps()
-                            .deployments()
-                            .withName(deployment.getFullResourceName())
-                            .patch(new DeploymentBuilder(deployment)
-                                    .editMetadata()
-                                    .withNamespace(resource.getMetadata().getNamespace())
-                                    .endMetadata()
-                                    .editSpec()
-                                    .withReplicas(1)
-                                    .endSpec()
-                                    .build());
-                    deploymentReplicas.put(deployment.getFullResourceName(),
-                            context.getClient()
-                                    .apps()
-                                    .deployments()
-                                    .withName(deployment.getFullResourceName())
-                                    .get()
-                                    .getSpec()
-                                    .getReplicas());
-                });
+        resource.setStatus(new ExecutionPlanStatus());
 
-        deploymentReplicas.forEach((key, value) -> {
+        resource.getSpec().getPlans().stream()
+                .map(Plan::getDeploymentNames)
+                .flatMap(List::stream)
+                .map(deploymentName -> getDeploymentByName(deploymentName,
+                        context.getClient(),
+                        resource.getMetadata().getNamespace()))
+                .flatMap(deployment -> {
+                    deployment.addOwnerReference(resource);
+                    log.debug("Adding owner reference {} to dependent resource {}",
+                            resource.getFullResourceName(),
+                            deployment.getFullResourceName());
+                    return Stream.of(deployment);
+                })
+                .forEach(deployment -> scaleDeployment(deployment, context.getClient()));
+
+        currentDeploymentReplicas.forEach((key, value) -> {
             if (value < 1) {
                 resource.getStatus().setError(true);
                 resource.getStatus().setReason(resource.getStatus()
@@ -76,8 +64,39 @@ public class ExecutionPlanReconciler implements Reconciler<ExecutionPlan>, Clean
             }
         });
 
-        resource.getStatus().setDeploymentReplicaCounts(deploymentReplicas);
+        if (!resource.getStatus().getError()) {
+            resource.getStatus().setReason("All Plan deployments have replica count >= 1");
+        }
+
+        resource.getStatus().setDeploymentReplicaCounts(currentDeploymentReplicas);
         return UpdateControl.patchStatus(resource);
+    }
+
+    private void scaleDeployment(Deployment deployment, KubernetesClient client) {
+        log.info("Attempting to scale deployment {}", deployment);
+        client.apps()
+                .deployments()
+                .inNamespace(deployment.getMetadata().getNamespace())
+                .withName(deployment.getFullResourceName())
+                .patch(new DeploymentBuilder(deployment)
+                        .editSpec()
+                        .withReplicas(deployment.getSpec().getReplicas() >= 1 ?
+                                deployment.getSpec().getReplicas() :
+                                1)
+                        .endSpec()
+                        .build());
+
+        currentDeploymentReplicas.put(deployment.getFullResourceName(),
+                client.apps()
+                        .deployments()
+                        .inNamespace(deployment.getFullResourceName())
+                        .withName(deployment.getFullResourceName())
+                        .get()
+                        .getSpec()
+                        .getReplicas());
+        log.debug("{} deployment -> {} replicas",
+                deployment.getFullResourceName(),
+                currentDeploymentReplicas.get(deployment.getFullResourceName()));
     }
 
     @Override
@@ -86,39 +105,15 @@ public class ExecutionPlanReconciler implements Reconciler<ExecutionPlan>, Clean
         return DeleteControl.defaultDelete();
     }
 
-    @Override
-    public Map<String, EventSource> prepareEventSources(EventSourceContext<ExecutionPlan> context) {
-        log.info("Preparing event sources...");
-        var deploymentEventSource = new InformerEventSource<>(InformerConfiguration.from(Deployment.class, context)
-                .withLabelSelector(SELECTOR)
-                .withPrimaryToSecondaryMapper((PrimaryToSecondaryMapper<ExecutionPlan>) primary ->
-                        primary.getSpec().getPlans().stream()
-                                .map(Plan::getDeploymentNames)
-                                .flatMap(List::stream)
-                                .map(deploymentName -> getDeploymentByName(deploymentName,
-                                        context.getClient(),
-                                        primary.getMetadata().getNamespace()))
-                                .flatMap(deployment -> {
-                                    deployment.addOwnerReference(primary);
-                                    log.debug("Adding owner reference {} to secondary rsc {}",
-                                            primary,
-                                            deployment);
-                                    return Stream.of(deployment);
-                                })
-                                .map(ResourceID::fromResource)
-                                .collect(Collectors.toSet()))
-                .build(), context);
-        return EventSourceInitializer.nameEventSources(deploymentEventSource);
-    }
-
     protected static Deployment getDeploymentByName(String name,
                                                     KubernetesClient client,
                                                     String namespace) {
-        return client.apps()
+        log.debug("Attempting to retrieve deployment {}:{}", namespace, name);
+        return Objects.requireNonNull(client.apps()
                 .deployments()
                 .inNamespace(namespace)
                 .withName(name)
-                .get();
+                .get());
     }
 
     @Override
